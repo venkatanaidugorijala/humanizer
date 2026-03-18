@@ -406,6 +406,150 @@
     color: var(--muted);
   }
 
+  /* API Key Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 22, 18, 0.55);
+    backdrop-filter: blur(3px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .modal {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 2rem 2.25rem;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    animation: slideIn 0.2s ease;
+  }
+
+  @keyframes slideIn {
+    from { transform: translateY(12px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .modal-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .modal-sub {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+  }
+
+  .modal-sub a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .modal-sub a:hover { text-decoration: underline; }
+
+  .key-input-wrap {
+    position: relative;
+    margin-bottom: 1rem;
+  }
+
+  .key-input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 0.7rem 2.5rem 0.7rem 0.9rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--ink);
+    background: white;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .key-input:focus { border-color: var(--accent-light); }
+
+  .key-toggle {
+    position: absolute;
+    right: 0.7rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.75rem;
+    padding: 0;
+  }
+
+  .modal-note {
+    font-size: 0.74rem;
+    color: var(--muted);
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .btn-set-key {
+    width: 100%;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 0.7rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .btn-set-key:hover { background: var(--accent); }
+
+  .modal-error {
+    font-size: 0.78rem;
+    color: #a33;
+    margin-top: 0.5rem;
+    min-height: 1.2em;
+  }
+
+  /* Key indicator in header */
+  .key-indicator {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.3rem 0.6rem;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+
+  .key-indicator:hover { border-color: var(--border); background: var(--warm); }
+
+  .key-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+
+  .key-dot.set { background: var(--human); }
+
   /* Responsive */
   @media (max-width: 720px) {
     main { grid-template-columns: 1fr; }
@@ -420,7 +564,29 @@
 <header>
   <div class="wordmark">Hu<em>man</em>izer</div>
   <div class="tagline">Strip the AI. Keep the thought.</div>
+  <button class="key-indicator" id="keyIndicator" title="Set API key">
+    <span class="key-dot" id="keyDot"></span>
+    <span id="keyLabel">No API key</span>
+  </button>
 </header>
+
+<!-- API Key Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title">Enter your API key</div>
+    <div class="modal-sub">
+      This app calls the Anthropic API directly from your browser. Your key is stored in memory only — never saved, never sent anywhere except Anthropic.<br><br>
+      Get a free key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>. Set a usage limit so you don't get surprised.
+    </div>
+    <div class="key-input-wrap">
+      <input class="key-input" id="keyInput" type="password" placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false" />
+      <button class="key-toggle" id="keyToggle">show</button>
+    </div>
+    <div class="modal-note">Your key lives in memory for this session only. Refresh the page and it's gone.</div>
+    <button class="btn-set-key" id="setKeyBtn">Save key & start →</button>
+    <div class="modal-error" id="modalError"></div>
+  </div>
+</div>
 
 <main>
   <!-- LEFT: Input -->
@@ -570,6 +736,7 @@ No markdown, no explanation, no preamble. Raw JSON only.`;
 
 let currentOutput = '';
 let changesVisible = false;
+let apiKey = '';
 
 const inputEl = document.getElementById('inputText');
 const outputEl = document.getElementById('outputText');
@@ -584,17 +751,57 @@ const charCount = document.getElementById('charCount');
 const wcBar = document.getElementById('wcBar');
 const btnLabel = document.getElementById('btnLabel');
 
+// Modal elements
+const modalOverlay = document.getElementById('modalOverlay');
+const keyInput = document.getElementById('keyInput');
+const keyToggle = document.getElementById('keyToggle');
+const setKeyBtn = document.getElementById('setKeyBtn');
+const modalError = document.getElementById('modalError');
+const keyIndicator = document.getElementById('keyIndicator');
+const keyDot = document.getElementById('keyDot');
+const keyLabel = document.getElementById('keyLabel');
+
+// Show/hide key
+keyToggle.addEventListener('click', () => {
+  const isHidden = keyInput.type === 'password';
+  keyInput.type = isHidden ? 'text' : 'password';
+  keyToggle.textContent = isHidden ? 'hide' : 'show';
+});
+
+// Save key
+setKeyBtn.addEventListener('click', () => {
+  const val = keyInput.value.trim();
+  if (!val.startsWith('sk-ant-')) {
+    modalError.textContent = 'That doesn\'t look right — Anthropic keys start with sk-ant-';
+    return;
+  }
+  apiKey = val;
+  modalOverlay.style.display = 'none';
+  keyDot.classList.add('set');
+  keyLabel.textContent = 'Key set ✓';
+});
+
+keyInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') setKeyBtn.click();
+  modalError.textContent = '';
+});
+
+// Click indicator to re-open modal
+keyIndicator.addEventListener('click', () => {
+  modalOverlay.style.display = 'flex';
+  keyInput.value = '';
+  modalError.textContent = '';
+});
+
 // Char counter
 inputEl.addEventListener('input', () => {
-  const len = inputEl.value.length;
-  charCount.textContent = len.toLocaleString() + ' chars';
+  charCount.textContent = inputEl.value.length.toLocaleString() + ' chars';
 });
 
 // Sample chips
 document.querySelectorAll('.sample-chip').forEach(chip => {
   chip.addEventListener('click', () => {
-    const key = chip.dataset.sample;
-    inputEl.value = SAMPLES[key];
+    inputEl.value = SAMPLES[chip.dataset.sample];
     charCount.textContent = inputEl.value.length.toLocaleString() + ' chars';
     inputEl.focus();
   });
@@ -634,6 +841,11 @@ humanizeBtn.addEventListener('click', async () => {
   const input = inputEl.value.trim();
   if (!input) return;
 
+  if (!apiKey) {
+    modalOverlay.style.display = 'flex';
+    return;
+  }
+
   humanizeBtn.disabled = true;
   btnLabel.textContent = 'Working…';
   placeholderEl.style.display = 'none';
@@ -648,13 +860,16 @@ humanizeBtn.addEventListener('click', async () => {
   changesToggle.classList.remove('active');
   currentOutput = '';
 
-  // Shimmer while loading
   outputEl.innerHTML = '<div class="shimmer" style="width:90%"></div><div class="shimmer" style="width:70%"></div><div class="shimmer" style="width:85%"></div><div class="shimmer" style="width:60%"></div>';
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
@@ -664,21 +879,25 @@ humanizeBtn.addEventListener('click', async () => {
     });
 
     const data = await response.json();
-    const raw = data.content?.map(b => b.text || '').join('').trim();
 
+    if (data.error) {
+      const msg = data.error.message || 'API error';
+      outputEl.innerHTML = `<span class="error-msg">${msg.includes('auth') ? 'Invalid API key. Click "Key set ✓" in the header to update it.' : msg}</span>`;
+      outputEl.classList.remove('typing-cursor');
+      return;
+    }
+
+    const raw = data.content?.map(b => b.text || '').join('').trim();
     let parsed;
     try {
-      const clean = raw.replace(/```json|```/g, '').trim();
-      parsed = JSON.parse(clean);
+      parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
     } catch {
-      // Fallback: treat entire response as humanized text
       parsed = { humanized: raw, changes: [] };
     }
 
     const humanized = parsed.humanized || '';
     const changes = parsed.changes || [];
 
-    // Animate text in
     outputEl.innerHTML = '';
     outputEl.classList.add('typing-cursor');
     currentOutput = humanized;
@@ -695,7 +914,6 @@ humanizeBtn.addEventListener('click', async () => {
         outputEl.classList.remove('typing-cursor');
         copyBtn.disabled = false;
 
-        // Word counts
         const wBefore = input.split(/\s+/).filter(Boolean).length;
         const wAfter = humanized.split(/\s+/).filter(Boolean).length;
         const diff = wAfter - wBefore;
@@ -704,11 +922,8 @@ humanizeBtn.addEventListener('click', async () => {
         document.getElementById('wcDiff').textContent = (diff > 0 ? '+' : '') + diff;
         wcBar.style.display = 'flex';
 
-        // Changes
         if (changes.length) {
-          changesList.innerHTML = changes.map(c =>
-            `<span class="change-tag removed">${c}</span>`
-          ).join('');
+          changesList.innerHTML = changes.map(c => `<span class="change-tag removed">${c}</span>`).join('');
           changesToggle.disabled = false;
         }
       }
@@ -716,7 +931,7 @@ humanizeBtn.addEventListener('click', async () => {
     typeOut();
 
   } catch (err) {
-    outputEl.innerHTML = `<span class="error-msg">Something went wrong. Try again.</span>`;
+    outputEl.innerHTML = `<span class="error-msg">Something went wrong. Check your key and try again.</span>`;
     outputEl.classList.remove('typing-cursor');
   } finally {
     humanizeBtn.disabled = false;
